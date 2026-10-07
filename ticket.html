@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POVU Tickets</title>
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Silkscreen&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="povu.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <a href="./"><img class="logo sm" src="logo.png" alt="POINT OF VU Student Film Festival"></a>
+  <!-- EDIT EACH YEAR: date, time, place -->
+  <div class="date">Saturday, February 20, 2027</div>
+  <div class="place">10:00 AM – 7:30 PM<br>Sarratt Cinema, Sarratt Student Center, Vanderbilt University</div>
+
+  <div class="card" id="formCard">
+    <h2>Free ticket</h2>
+    <form id="f">
+      <div class="field">
+        <label for="name">Full name</label>
+        <input id="name" autocomplete="name" required>
+      </div>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" inputmode="email" required>
+      <div class="hint">Use your Vanderbilt email (@vanderbilt.edu). Not a Vanderbilt student? Use your Gmail or personal email.</div>
+      <button class="go" id="btn" type="submit">Get my free ticket</button>
+      <div class="err" id="err"></div>
+    </form>
+  </div>
+
+  <div class="card ticket hide" id="ticketCard">
+    <div class="head" id="head">You're in!</div>
+    <img id="qr" alt="Your ticket QR code">
+    <div class="code" id="code"></div>
+    <div class="who" id="who"></div>
+    <div class="note"><b>Screenshot this.</b> It's your ticket. Show it at the door.<br>We also emailed it to you.</div>
+  </div>
+
+  <a class="back" href="./">← All links</a>
+</div>
+<script>
+  document.getElementById('f').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('btn'), err = document.getElementById('err');
+    err.textContent = ''; btn.disabled = true; btn.textContent = 'Getting your ticket…';
+    povuApi({ api: 'register', name: document.getElementById('name').value, email: document.getElementById('email').value })
+      .then(function (t) {
+        document.getElementById('formCard').classList.add('hide');
+        document.getElementById('ticketCard').classList.remove('hide');
+        document.getElementById('qr').src = t.qr;
+        document.getElementById('code').textContent = t.id;
+        document.getElementById('who').textContent = t.name;
+        if (t.existing) document.getElementById('head').textContent = 'You already have a ticket!';
+        window.scrollTo(0, 0);
+      })
+      .catch(function (x) {
+        err.textContent = (x && x.message) || 'Something went wrong. Try again.';
+        btn.disabled = false; btn.textContent = 'Get my free ticket';
+      });
+  });
+</script>
+</body>
+</html>

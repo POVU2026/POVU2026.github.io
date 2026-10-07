@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POVU Check-in</title>
+<meta name="robots" content="noindex">
+<script src="povu.js"></script>
+<style>
+  :root{--bg:#0e0e0e;--card:#181818;--line:#2a2a2a;--text:#f2f2f2;--muted:#a3a3a3;--accent:#9fd3c1;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+  .wrap{max-width:440px;margin:0 auto;padding:22px 16px 40px}
+  .brand{font-weight:800;color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:.5px}
+  h1{font-size:22px;margin:4px 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+  input{width:100%;font-size:17px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:#0f0f0f;color:var(--text)}
+  button{font-size:16px;font-weight:700;padding:12px 16px;border:0;border-radius:10px;background:var(--accent);color:#0e0e0e;cursor:pointer}
+  .full{width:100%;margin-top:10px}
+  .result{border-radius:16px;padding:26px 18px;text-align:center;margin-bottom:14px}
+  .result .big{font-size:30px;font-weight:800}
+  .result .name{font-size:22px;margin-top:6px}
+  .result .sub{font-size:15px;margin-top:6px;opacity:.85}
+  .ok{background:#12391f;border:2px solid #3ddc84}
+  .warn{background:#3d3210;border:2px solid #f5c542}
+  .bad{background:#3d1414;border:2px solid #ff6b6b}
+  .muted{color:var(--muted);font-size:14px;line-height:1.5}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .row small{color:var(--muted);display:block}
+  .stat{font-size:15px;color:var(--muted)}
+  .stat b{color:var(--text);font-size:18px}
+  .hide{display:none}
+  a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">POINT OF VU · Door</div>
+  <h1>Check-in</h1>
+
+  <div class="card hide" id="pinCard">
+    <div class="muted" style="margin-bottom:10px">Staff only. Enter the door PIN.</div>
+    <input id="pin" type="password" inputmode="numeric" placeholder="PIN">
+    <button class="full" onclick="savePin()">Unlock</button>
+    <div class="muted" id="pinErr" style="color:#ff8a80;margin-top:8px"></div>
+  </div>
+
+  <div id="main" class="hide">
+    <div id="result"></div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px">Scan a ticket QR with your phone camera, or search by name / email / code:</div>
+      <input id="q" placeholder="Search guests" oninput="search()">
+      <div id="list" style="margin-top:6px"></div>
+    </div>
+    <div class="stat" id="stat"></div>
+    <p class="muted"><a href="#" onclick="lock();return false">Lock this phone</a></p>
+  </div>
+</div>
+<script>
+  var TICKET = String(new URLSearchParams(location.search).get('id') || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  var PIN = null;
+  try { PIN = localStorage.getItem('povuPin'); } catch(e){}
+
+  function show(id,on){ document.getElementById(id).classList.toggle('hide',!on); }
+  function run(fn,a,b){
+    var p = fn==='checkIn' ? {api:'checkin', id:a, pin:b} : fn==='lookup' ? {api:'lookup', q:a, pin:b} : {api:'stats', pin:a};
+    return povuApi(p); }
+
+  function start(){
+    if(!PIN){ show('pinCard',true); show('main',false); return; }
+    show('pinCard',false); show('main',true);
+    if(TICKET) checkIn(TICKET);
+    refresh();
+  }
+  function savePin(){
+    var p=document.getElementById('pin').value.trim();
+    run('stats',p).then(function(){
+      PIN=p; try{localStorage.setItem('povuPin',p);}catch(e){}
+      document.getElementById('pinErr').textContent=''; start();
+    }).catch(function(){ document.getElementById('pinErr').textContent='Wrong PIN.'; });
+  }
+  function lock(){ try{localStorage.removeItem('povuPin');}catch(e){} PIN=null; start(); }
+
+  function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function showResult(r){
+    var el=document.getElementById('result');
+    if(r.status==='ok') el.innerHTML='<div class="result ok"><div class="big">✓ Checked in</div><div class="name">'+esc(r.name)+'</div><div class="sub">'+r.id+'</div></div>';
+    else if(r.status==='already') el.innerHTML='<div class="result warn"><div class="big">Already checked in</div><div class="name">'+esc(r.name)+'</div><div class="sub">at '+esc(r.at)+' · '+r.id+'</div></div>';
+    else el.innerHTML='<div class="result bad"><div class="big">Ticket not found</div><div class="sub">'+esc(r.id||'')+'</div></div>';
+    window.scrollTo(0,0);
+  }
+  function checkIn(id){
+    document.getElementById('result').innerHTML='<div class="card muted">Checking '+esc(id)+'…</div>';
+    run('checkIn',id,PIN).then(function(r){ showResult(r); refresh(); search(); })
+      .catch(function(e){ if(/PIN/.test(e.message)) lock(); else document.getElementById('result').innerHTML='<div class="result bad"><div class="big">Error</div><div class="sub">'+esc(e.message)+'</div></div>'; });
+  }
+  var timer;
+  function search(){
+    clearTimeout(timer);
+    var q=document.getElementById('q').value;
+    if(q.trim().length<2){ document.getElementById('list').innerHTML=''; return; }
+    timer=setTimeout(function(){
+      run('lookup',q,PIN).then(function(rows){
+        document.getElementById('list').innerHTML = rows.length ? rows.map(function(r){
+          return '<div class="row"><div>'+esc(r.name)+'<small>'+esc(r.email)+' · '+r.id+'</small></div>'+
+            (r.checked?'<span class="muted">In ✓</span>':'<button onclick="checkIn(\''+r.id+'\')">Check in</button>')+'</div>';
+        }).join('') : '<div class="muted" style="padding:10px 0">No match.</div>';
+      });
+    },250);
+  }
+  function refresh(){ run('stats',PIN).then(function(s){ document.getElementById('stat').innerHTML='<b>'+s.in+'</b> checked in of <b>'+s.total+'</b> RSVPs'; }); }
+  start();
+</script>
+</body>
+</html>
